@@ -565,7 +565,7 @@ var SCENARIO = {
   scenes: [
 
     // 第一幕：入居
-    { id:"p01", name:"", bg:"apartment",
+    { id:"p01", name:"", bg:"apartment", bgm:"calm",
       text:"引越しの翌朝、最初に気づいたのは音だった。" },
     { id:"p02", name:"",
       text:"壁の向こうから、足音がした。\nゆっくりと、規則正しく。\n右から左へ。左から右へ。" },
@@ -577,11 +577,11 @@ var SCENARIO = {
       text:"このアパートを選んだのは安かったからだ。\n不動産屋の担当者は、やけに早口で\n「前の入居者は長期不在で解約になりまして」と言った。" },
     { id:"p06", name:"岸本 誠",
       text:"（……足音は、まだ続いている）" },
-    { id:"p07", name:"",
+    { id:"p07", name:"", se:"knock",
       text:"岸本は壁に耳を当てた。\n足音は、止まった。\n\n代わりに——何かが、壁を叩いた。\n三回。" },
 
     // 第二幕：隣人
-    { id:"q01", name:"", bg:"hallway",
+    { id:"q01", name:"", bg:"hallway", bgm:"tension",
       text:"管理人に聞いた。\n「隣の部屋——203号室のことですが」" },
     { id:"q02", name:"管理人",
       text:"……ああ、203は。\n空き部屋ですよ。もう半年以上" },
@@ -603,7 +603,7 @@ var SCENARIO = {
       text:"203に女の人が住んでたけど\nある日突然いなくなった\n荷物そのままで" },
     { id:"q11", name:"岸本 誠",
       text:"（荷物、そのまま——）" },
-    { id:"q12", name:"",
+    { id:"q12", name:"", se:"knock",
       text:"深夜二時。\n足音が止まった。\n代わりに——ドアを、ノックする音がした。\n\n岸本の部屋の、ドアを。" },
 
     // 選択肢①
@@ -616,7 +616,7 @@ var SCENARIO = {
     },
 
     // ルートA：ドアを開ける
-    { id:"ra01", name:"", bg:"hallway",
+    { id:"ra01", name:"", bg:"hallway", se:"door",
       text:"岸本はドアを開けた。\n\n廊下には、誰もいなかった。" },
     { id:"ra02", name:"",
       text:"ただ——203号室のドアが\nわずかに、開いていた。" },
@@ -628,7 +628,7 @@ var SCENARIO = {
       text:"ドアの隙間から、中を見た。\n\n暗くて、よく見えない。\nだが——部屋の中に、荷物があった。\nまだ片付けられていない、段ボール箱が。" },
     { id:"ra06", name:"岸本 誠",
       text:"（いなくなった、前の入居者の——）" },
-    { id:"ra07", name:"",
+    { id:"ra07", name:"", bgm:"horror", se:"stinger",
       text:"その時。\n部屋の奥で、何かが動いた。\n\n人の、シルエット。\n\nこちらを向いている。" },
     { id:"ra08", name:"岸本 誠",
       text:"（……顔が、見えない）\n（暗くて——）\n（でも、こっちを見てる）" },
@@ -685,7 +685,7 @@ var SCENARIO = {
       text:"（クローゼットは、今朝確認した）\n（何も入れていない）" },
     { id:"rb12", name:"",
       text:"物音は、続いた。\nかすかに——何かが、擦れるような音。\n布が、擦れるような。" },
-    { id:"rb_c02", name:"岸本 誠",
+    { id:"rb_c02", name:"岸本 誠", bgm:"horror", se:"stinger",
       text:"岸本はクローゼットの前に立った。\n取っ手に手をかけた。\n\nその時。\n中から声がした。\n\n——たす、けて。",
       choice: { options: [
         { label:"クローゼットを開ける",      next:"end_b_open" },
@@ -695,7 +695,7 @@ var SCENARIO = {
 
     // エンディング群
 
-    { id:"end_a_touch", bg:"room_red",
+    { id:"end_a_touch", bg:"room_red", bgm:"ending",
       ending: {
         type: "bad",
         label: "BAD END",
@@ -711,7 +711,7 @@ var SCENARIO = {
       }
     },
 
-    { id:"end_a_pass", bg:"outside",
+    { id:"end_a_pass", bg:"outside", bgm:"ending",
       ending: {
         type: "normal",
         label: "NORMAL END",
@@ -727,7 +727,7 @@ var SCENARIO = {
       }
     },
 
-    { id:"end_b_open", bg:"void_bg",
+    { id:"end_b_open", bg:"void_bg", bgm:"ending",
       ending: {
         type: "another",
         label: "ANOTHER END",
@@ -744,7 +744,7 @@ var SCENARIO = {
       }
     },
 
-    { id:"end_b_escape", bg:"end_light",
+    { id:"end_b_escape", bg:"end_light", bgm:"ending",
       ending: {
         type: "good",
         label: "GOOD END",
@@ -768,6 +768,341 @@ var SCENARIO = {
 /* ================================================================
    エンジン本体（編集不要）
    ================================================================ */
+
+/* ================================================================
+   Web Audio API 音声システム
+   ================================================================ */
+
+var _actx       = null;   // AudioContext
+var _audioReady = false;  // ユーザー操作後にtrue
+var _bgmNodes   = [];     // 現在のBGMノード群
+var _currentBgm = null;   // 現在のBGMキー
+var BGM_VOL     = 0.18;   // BGMマスター音量
+var SE_VOL      = 0.5;    // SEマスター音量
+
+function getCtx() {
+  if (!_actx) {
+    _actx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_actx.state === "suspended") { _actx.resume(); }
+  return _actx;
+}
+
+function unlockAudio() {
+  if (_audioReady) return;
+  _audioReady = true;
+  getCtx();
+}
+document.addEventListener("click",      unlockAudio, { once: true });
+document.addEventListener("touchstart", unlockAudio, { once: true });
+document.addEventListener("keydown",    unlockAudio, { once: true });
+
+/* ── BGM定義（プログラム生成） ── */
+var BGM_DEFS = {
+
+  // 穏やかな環境音：低いドローン＋微かな揺らぎ
+  calm: function(ctx, masterGain) {
+    var nodes = [];
+    [55, 82.4, 110].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      var lfo = ctx.createOscillator();
+      var lg  = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      lfo.type = "sine";
+      lfo.frequency.value = 0.08 + i * 0.03;
+      lg.gain.value = freq * 0.003;
+      g.gain.value  = BGM_VOL * (0.5 - i * 0.12);
+      lfo.connect(lg); lg.connect(osc.frequency);
+      osc.connect(g);  g.connect(masterGain);
+      lfo.start(); osc.start();
+      nodes.push(osc, lfo, g, lg);
+    });
+    return nodes;
+  },
+
+  // 緊張BGM：低音パルス＋不安定な和音
+  tension: function(ctx, masterGain) {
+    var nodes = [];
+    // 低音パルス
+    var lfo  = ctx.createOscillator();
+    var lfog = ctx.createGain();
+    lfo.type = "sine"; lfo.frequency.value = 1.4;
+    lfog.gain.value = 0.0;
+    lfo.connect(lfog); lfo.start();
+
+    [49, 73.4, 98].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      var tremolo = ctx.createGain();
+      osc.type = i === 0 ? "sawtooth" : "sine";
+      osc.frequency.value = freq;
+      var tLfo  = ctx.createOscillator();
+      var tLfoG = ctx.createGain();
+      tLfo.frequency.value = 1.4;
+      tLfoG.gain.value = 0.3;
+      tLfo.connect(tLfoG); tLfoG.connect(tremolo.gain);
+      tremolo.gain.value = 0.7;
+      g.gain.value = BGM_VOL * (0.45 - i * 0.1);
+      osc.connect(tremolo); tremolo.connect(g); g.connect(masterGain);
+      tLfo.start(); osc.start();
+      nodes.push(osc, g, tLfo, tLfoG, tremolo);
+    });
+    // 高域の不安定音
+    var hi  = ctx.createOscillator();
+    var hig = ctx.createGain();
+    hi.type = "triangle"; hi.frequency.value = 523.2;
+    var hiLfo  = ctx.createOscillator();
+    var hiLfoG = ctx.createGain();
+    hiLfo.frequency.value = 0.25; hiLfoG.gain.value = 8;
+    hiLfo.connect(hiLfoG); hiLfoG.connect(hi.frequency);
+    hig.gain.value = BGM_VOL * 0.04;
+    hi.connect(hig); hig.connect(masterGain);
+    hiLfo.start(); hi.start();
+    nodes.push(hi, hig, hiLfo, hiLfoG, lfo, lfog);
+    return nodes;
+  },
+
+  // ホラーBGM：不協和ドローン＋ランダム高音
+  horror: function(ctx, masterGain) {
+    var nodes = [];
+    // 不協和な低音層
+    [40, 56.2, 84.5, 113].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      var lfo = ctx.createOscillator();
+      var lg  = ctx.createGain();
+      osc.type = i % 2 === 0 ? "sawtooth" : "square";
+      osc.frequency.value = freq;
+      lfo.frequency.value = 0.05 + i * 0.04;
+      lg.gain.value = freq * 0.004;
+      g.gain.value  = BGM_VOL * (0.4 - i * 0.06);
+      lfo.connect(lg); lg.connect(osc.frequency);
+      osc.connect(g);  g.connect(masterGain);
+      lfo.start(); osc.start();
+      nodes.push(osc, lfo, g, lg);
+    });
+    // ランダムなピタッと高音（不規則）
+    function scheduleRandom() {
+      if (!_actx) return;
+      var delay = 3 + Math.random() * 7;
+      var t = setTimeout(function() {
+        if (_currentBgm !== "horror" || !_actx) return;
+        var osc2 = ctx.createOscillator();
+        var env  = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.value = 800 + Math.random() * 600;
+        env.gain.setValueAtTime(0, ctx.currentTime);
+        env.gain.linearRampToValueAtTime(BGM_VOL * 0.08, ctx.currentTime + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+        osc2.connect(env); env.connect(masterGain);
+        osc2.start(); osc2.stop(ctx.currentTime + 0.8);
+        scheduleRandom();
+      }, delay * 1000);
+      nodes.push({ _timer: t });
+    }
+    scheduleRandom();
+    return nodes;
+  },
+
+  // エンディング：静かなアンビエント
+  ending: function(ctx, masterGain) {
+    var nodes = [];
+    [65.4, 98, 130.8, 196].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      var lfo = ctx.createOscillator();
+      var lg  = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      lfo.type = "sine";
+      lfo.frequency.value = 0.05 + i * 0.02;
+      lg.gain.value = 1.5;
+      g.gain.value  = BGM_VOL * (0.38 - i * 0.06);
+      lfo.connect(lg); lg.connect(osc.frequency);
+      osc.connect(g);  g.connect(masterGain);
+      lfo.start(); osc.start();
+      nodes.push(osc, lfo, g, lg);
+    });
+    return nodes;
+  },
+};
+
+/* ── BGM再生・停止 ── */
+function stopBgmNodes(nodes, onDone) {
+  // タイマー系を先にクリア
+  nodes.forEach(function(n) { if (n && n._timer) clearTimeout(n._timer); });
+  var audioNodes = nodes.filter(function(n) { return n && n.disconnect; });
+  if (audioNodes.length === 0) { if (onDone) onDone(); return; }
+  var masterG = getCtx().createGain();
+  masterG.gain.value = 1;
+  masterG.connect(getCtx().destination);
+  // フェードアウト後に切断
+  var ctx = getCtx();
+  masterG.gain.setValueAtTime(1, ctx.currentTime);
+  masterG.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
+  setTimeout(function() {
+    audioNodes.forEach(function(n) { try { n.disconnect(); } catch(e){} });
+    try { masterG.disconnect(); } catch(e){}
+    if (onDone) onDone();
+  }, 900);
+}
+
+function playBgm(key) {
+  if (!_audioReady) return;
+  if (_currentBgm === key) return;
+  var def = BGM_DEFS[key];
+  if (!def) return;
+  _currentBgm = key;
+
+  var oldNodes = _bgmNodes;
+  _bgmNodes = [];
+
+  var ctx = getCtx();
+  var masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0, ctx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.5);
+  masterGain.connect(ctx.destination);
+
+  _bgmNodes = def(ctx, masterGain);
+  _bgmNodes.push(masterGain);
+
+  // 古いBGMをフェードアウト
+  if (oldNodes.length > 0) { stopBgmNodes(oldNodes, null); }
+}
+
+function stopBgm() {
+  if (_bgmNodes.length === 0) return;
+  _currentBgm = null;
+  var nodes = _bgmNodes;
+  _bgmNodes = [];
+  stopBgmNodes(nodes, null);
+}
+
+/* ── SE定義（プログラム生成） ── */
+var SE_DEFS = {
+
+  // テキスト送りクリック：短い柔らかいタップ音
+  click: function(ctx) {
+    var osc = ctx.createOscillator();
+    var g   = ctx.createGain();
+    osc.type = "sine"; osc.frequency.value = 800;
+    osc.frequency.setTargetAtTime(400, ctx.currentTime, 0.015);
+    g.gain.setValueAtTime(SE_VOL * 0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.07);
+  },
+
+  // 選択肢決定：明るめの2音
+  decision: function(ctx) {
+    [0, 0.08].forEach(function(delay, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = i === 0 ? 660 : 880;
+      g.gain.setValueAtTime(0, ctx.currentTime + delay);
+      g.gain.linearRampToValueAtTime(SE_VOL * 0.35, ctx.currentTime + delay + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.18);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.2);
+    });
+  },
+
+  // ノック音：低い打撃音×3
+  knock: function(ctx) {
+    [0, 0.22, 0.44].forEach(function(delay) {
+      var buf = ctx.createBuffer(1, ctx.sampleRate * 0.12, ctx.sampleRate);
+      var d   = buf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 6);
+      }
+      var src = ctx.createBufferSource();
+      var g   = ctx.createGain();
+      var filt = ctx.createBiquadFilter();
+      filt.type = "lowpass"; filt.frequency.value = 180;
+      src.buffer = buf;
+      g.gain.setValueAtTime(SE_VOL * 1.4, ctx.currentTime + delay);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.1);
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      src.start(ctx.currentTime + delay);
+    });
+  },
+
+  // ドア音：軋み＋閉まる音
+  door: function(ctx) {
+    // 軋み
+    var osc = ctx.createOscillator();
+    var g   = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(120, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(60, ctx.currentTime + 0.4);
+    g.gain.setValueAtTime(SE_VOL * 0.15, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(SE_VOL * 0.08, ctx.currentTime + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.5);
+    // 閉まる低音
+    var buf = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
+    var d   = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 4);
+    }
+    var src2 = ctx.createBufferSource();
+    var g2   = ctx.createGain();
+    var filt2 = ctx.createBiquadFilter();
+    filt2.type = "lowpass"; filt2.frequency.value = 120;
+    src2.buffer = buf;
+    g2.gain.setValueAtTime(SE_VOL * 1.2, ctx.currentTime + 0.5);
+    g2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.65);
+    src2.connect(filt2); filt2.connect(g2); g2.connect(ctx.destination);
+    src2.start(ctx.currentTime + 0.5);
+  },
+
+  // ホラースティンガー：不協和一撃
+  stinger: function(ctx) {
+    [180, 254, 338, 451].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      osc.type = i % 2 === 0 ? "sawtooth" : "square";
+      osc.frequency.value = freq;
+      osc.frequency.setTargetAtTime(freq * 0.7, ctx.currentTime + 0.05, 0.3);
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(SE_VOL * (0.28 - i * 0.04), ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.4);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 1.5);
+    });
+  },
+
+  // チャイム：場面転換
+  chime: function(ctx) {
+    [523.2, 659.3, 783.9].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var g   = ctx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      var t = ctx.currentTime + i * 0.12;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(SE_VOL * 0.22, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 1.0);
+    });
+  },
+};
+
+function playSe(key) {
+  if (!_audioReady) return;
+  var def = SE_DEFS[key];
+  if (!def) return;
+  try { def(getCtx()); } catch(e) {}
+}
+
+function playClickSe() {
+  playSe("click");
+}
 
 var currentSceneIndex = 0;
 var isTyping = false;
@@ -970,12 +1305,18 @@ function showScene(idOrIndex) {
   }
 
   if (scene.bg) setBg(scene.bg);
+  if (scene.bgm !== undefined) {
+    if (scene.bgm === null) { stopBgm(); }
+    else { playBgm(scene.bgm); }
+  }
+  if (scene.se) { playSe(scene.se); }
   document.getElementById("char-name").textContent = scene.name || "";
   typeText(scene.text || "");
   _pendingChoice = scene.choice || null;
 }
 
 function onScreenTap() {
+  playClickSe();
   if (isTyping) { skipTyping(); return; }
   if (_pendingChoice) {
     showChoice(_pendingChoice);
@@ -1003,6 +1344,7 @@ function showChoice(choice) {
 }
 
 function selectChoice(which) {
+  playSe("decision");
   var btn = document.getElementById("choice-" + which);
   var nextId = btn.dataset.next;
   document.getElementById("choice-panel").classList.remove("show");
@@ -1012,6 +1354,10 @@ function selectChoice(which) {
 /* ── エンディング ── */
 function showEnding(ending, sceneId) {
   if (ending.bg) setBg(ending.bg);
+  if (ending.bgm !== undefined) {
+    if (ending.bgm === null) { stopBgm(); }
+    else { playBgm(ending.bgm); }
+  }
 
   // 解放記録
   var isNew = unlockEnding(sceneId);
@@ -1040,6 +1386,7 @@ function startGame() {
 
 /* ── タイトルへ ── */
 function goTitle() {
+  stopBgm();
   fadeTransition(function() {
     showScreen("title-screen");
   });
@@ -1059,7 +1406,7 @@ document.addEventListener("keydown", function(e) {
 buildSceneMap();
 document.getElementById("title-text").textContent = SCENARIO.title;
 document.getElementById("credit-content").innerHTML = SCENARIO.credit;
-setBg("night_street");
+setBg("apartment");
 showScreen("title-screen");
 </script>
 </body>
