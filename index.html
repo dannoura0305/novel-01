@@ -383,7 +383,24 @@ body {
 }
 
 /* ── エンディング画面 ── */
-#ending-screen { z-index: 10; gap: 20px; padding: 24px; }
+#ending-screen {
+  z-index: 10;
+  justify-content: flex-start;
+  padding: 0;
+  overflow: hidden;
+}
+#ending-scroll {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 120px;
+  gap: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+#ending-scroll::-webkit-scrollbar { display: none; }
 
 .ending-label {
   font-family: var(--font-sans);
@@ -413,20 +430,40 @@ body {
 .ending-line {
   width: 80px; height: 1px;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  flex-shrink: 0;
+}
+/* ボタンは画面下部に固定 */
+#ending-btn-wrap {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 20px 24px 36px;
+  background: linear-gradient(transparent, rgba(6,6,8,0.98) 40%);
+  z-index: 11;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+#ending-screen.active #ending-btn-wrap {
+  opacity: 1;
+  pointer-events: all;
 }
 .ending-btn {
-  background: transparent;
+  background: rgba(6,6,8,0.85);
   border: 1px solid var(--border-gold);
   color: var(--text-main);
   font-family: var(--font-serif);
   font-size: clamp(13px, 3vw, 16px);
   letter-spacing: 0.35em;
-  padding: 13px 40px;
+  padding: 14px 48px;
   cursor: pointer;
   transition: all 0.3s;
-  margin-top: 4px;
 }
-.ending-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ending-btn:hover, .ending-btn:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ── フェード ── */
 #fade-overlay {
@@ -514,12 +551,16 @@ body {
 
 <!-- エンディング -->
 <div id="ending-screen" class="screen">
-  <div class="ending-label" id="ending-label">ENDING</div>
-  <div class="ending-line"></div>
-  <div class="ending-title" id="ending-title"></div>
-  <div class="ending-text" id="ending-text"></div>
-  <div class="ending-line"></div>
-  <button class="ending-btn" onclick="goTitle()">タイトルへ戻る</button>
+  <div id="ending-scroll">
+    <div class="ending-label" id="ending-label">ENDING</div>
+    <div class="ending-line"></div>
+    <div class="ending-title" id="ending-title"></div>
+    <div class="ending-text" id="ending-text"></div>
+    <div class="ending-line"></div>
+  </div>
+  <div id="ending-btn-wrap">
+    <button class="ending-btn" onclick="goTitle()">タイトルへ戻る</button>
+  </div>
 </div>
 
 <script>
